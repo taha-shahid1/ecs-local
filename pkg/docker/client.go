@@ -1,11 +1,11 @@
 package docker
 
-// Client wraps the Docker SDK client
+// Client wraps the Docker SDK
 type Client struct {
-	// Docker client will be added here
+	// TODO: Docker client implementation
 }
 
-// NewClient creates a new Docker client
+// NewClient initializes a Docker client
 func NewClient() (*Client, error) {
 	return &Client{}, nil
 }

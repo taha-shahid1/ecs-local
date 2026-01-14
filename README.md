@@ -8,13 +8,13 @@ An open-source tool to simulate Amazon ECS (Elastic Container Service) locally u
 
 ## Features (V1 - MVP)
 
-- 🚀 Parse and validate ECS task definition JSON
-- 🐳 Run containers using Docker SDK
-- 📊 List running tasks and containers
-- 📝 Stream and follow container logs
-- ⚙️ Handle resource limits (CPU, memory)
-- 🔗 Support for container dependencies
-- 🌐 Port mappings and environment variables
+- Parse and validate ECS task definition JSON
+- Run containers using Docker SDK
+- List running tasks and containers
+- Stream and follow container logs
+- Handle resource limits (CPU, memory)
+- Support for container dependencies
+- Port mappings and environment variables
 
 ## Prerequisites
 
@@ -27,18 +27,14 @@ An open-source tool to simulate Amazon ECS (Elastic Container Service) locally u
 ### From Source
 
 ```bash
-# Clone the repository
-git clone https://github.com/tahashahid/ecs-local.git
+git clone https://github.com/taha-shahid1/ecs-local.git
 cd ecs-local
 
-# Build and install
 make install
-
-# Or just build
-make build
+# Or just: make build
 ```
 
-The binary will be available at `./bin/ecs-dev`
+Binary output: `./bin/ecs-dev`
 
 ## Usage
 
@@ -141,17 +137,9 @@ make clean
   ]
 }
 ```
-
-## Roadmap
-
-- [x] V1: MVP - Basic task execution and container orchestration
-- [ ] V2: Service mode with health checks and load balancing
-- [ ] V3: Task placement strategies and constraints
-- [ ] V4: Integration with AWS services (Secrets Manager, Parameter Store)
-
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions welcome.
 
 ## License
 

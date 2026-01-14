@@ -1,12 +1,12 @@
 package config
 
-// Config holds the configuration for ecs-dev
+// Config represents ecs-dev configuration
 type Config struct {
 	DockerHost string
 	LogLevel   string
 }
 
-// NewConfig creates a new configuration with default values
+// NewConfig returns default configuration
 func NewConfig() *Config {
 	return &Config{
 		DockerHost: "unix:///var/run/docker.sock",
