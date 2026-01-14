@@ -78,7 +78,14 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 		}
 	}
 
-	// Create and start containers
+	// Build dependency graph
+	depGraph, err := buildDependencyGraph(taskDef.ContainerDefinitions)
+	if err != nil {
+		task.Status = "FAILED"
+		return nil, fmt.Errorf("failed to build dependency graph: %w", err)
+	}
+
+	// Create all containers first (don't start yet)
 	for _, containerDef := range taskDef.ContainerDefinitions {
 		containerConfig := convertToDockerConfig(taskID, containerDef)
 
@@ -101,8 +108,23 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 		fmt.Printf("Connected %s to network %s\n", containerDef.Name, networkName)
 	}
 
-	// Start containers
-	for name, containerID := range task.Containers {
+	// Start containers in dependency order
+	startOrder := depGraph.getStartOrder()
+	for _, name := range startOrder {
+		containerID := task.Containers[name]
+		containerDef := depGraph.containers[name]
+
+		for _, dep := range containerDef.DependsOn {
+			depContainerID := task.Containers[dep.ContainerName]
+			fmt.Printf("Waiting for %s (condition: %s)...\n", dep.ContainerName, dep.Condition)
+			
+			err := m.waitForCondition(ctx, depContainerID, dep.Condition)
+			if err != nil {
+				task.Status = "FAILED"
+				return nil, fmt.Errorf("dependency %s failed for container %s: %w", dep.ContainerName, name, err)
+			}
+		}
+
 		err := m.dockerClient.StartContainer(ctx, containerID)
 		if err != nil {
 			task.Status = "FAILED"

@@ -30,6 +30,14 @@ ecs-dev run examples/network-test.json
 ecs-dev logs client -f
 ```
 
+### dependency-test.json
+Tests container dependencies with COMPLETE condition.
+
+```bash
+ecs-dev run examples/dependency-test.json
+# Init container runs first and completes, then app starts
+```
+
 ## Networking
 
 Each task gets its own Docker bridge network, enabling container-to-container communication:
@@ -40,6 +48,16 @@ Each task gets its own Docker bridge network, enabling container-to-container co
 - Networks are cleaned up when tasks are removed
 
 Example: If you have containers named "web" and "redis" in the same task, the web container can connect to Redis at `redis:6379`.
+
+## Container Dependencies
+
+Control the startup order of containers using the `dependsOn` field:
+
+- **START**: Wait for dependency to be running
+- **COMPLETE**: Wait for dependency to exit (any exit code)
+- **SUCCESS**: Wait for dependency to exit with code 0
+
+Dependencies are validated at startup. Circular dependencies and missing containers are detected and rejected.
 
 ## Creating Your Own Task Definitions
 

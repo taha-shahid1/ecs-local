@@ -133,3 +133,12 @@ func (c *Client) GetContainerStatus(ctx context.Context, containerID string) (st
 	}
 	return inspect.State.Status, nil
 }
+
+// GetContainerInspect returns full container inspection details
+func (c *Client) GetContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error) {
+	inspect, err := c.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return types.ContainerJSON{}, fmt.Errorf("failed to inspect container: %w", err)
+	}
+	return inspect, nil
+}

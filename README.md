@@ -21,6 +21,9 @@ An open-source tool to simulate Amazon ECS (Elastic Container Service) locally u
 - **DNS-based service discovery** - Containers can reach each other by name
 - **Multi-container support** - Run complex task definitions with multiple containers
 - **Automatic network lifecycle** - Networks created and cleaned up automatically
+- **Container dependencies** - Start containers in dependency order
+- **Dependency conditions** - Support START, COMPLETE, and SUCCESS conditions
+- **Failure handling** - Stop task startup when dependencies fail
 
 ## Prerequisites
 
