@@ -113,19 +113,20 @@ func psCmd() *cobra.Command {
 				return nil
 			}
 
-			fmt.Printf("%-25s %-20s %-15s %-10s %s\n", "TASK ID", "FAMILY", "STATUS", "CONTAINERS", "STARTED")
-			fmt.Println("--------------------------------------------------------------------------------------")
+			fmt.Printf("%-25s %-20s %-15s %-10s %-30s %s\n", "TASK ID", "FAMILY", "STATUS", "CONTAINERS", "NETWORK", "STARTED")
+			fmt.Println("-------------------------------------------------------------------------------------------------------------------")
 
 			for _, t := range tasks {
 				if !showAll && t.Status == "STOPPED" {
 					continue
 				}
 
-				fmt.Printf("%-25s %-20s %-15s %-10d %s\n",
+				fmt.Printf("%-25s %-20s %-15s %-10d %-30s %s\n",
 					t.ID,
 					t.Family,
 					t.Status,
 					len(t.Containers),
+					t.NetworkName,
 					t.StartedAt.Format("2006-01-02 15:04:05"),
 				)
 			}

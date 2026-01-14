@@ -6,15 +6,21 @@ An open-source tool to simulate Amazon ECS (Elastic Container Service) locally u
 
 `ecs-local` allows you to run and test ECS task definitions locally without needing AWS infrastructure. It parses ECS task definition JSON files and orchestrates containers using the Docker SDK.
 
-## Features (V1 - MVP)
+## Features
 
+### V1 - MVP
 - Parse and validate ECS task definition JSON
 - Run containers using Docker SDK
 - List running tasks and containers
 - Stream and follow container logs
 - Handle resource limits (CPU, memory)
-- Support for container dependencies
 - Port mappings and environment variables
+
+### V2 - Multi-Container & Networking
+- **Docker network per task** - Isolated networking for each task
+- **DNS-based service discovery** - Containers can reach each other by name
+- **Multi-container support** - Run complex task definitions with multiple containers
+- **Automatic network lifecycle** - Networks created and cleaned up automatically
 
 ## Prerequisites
 

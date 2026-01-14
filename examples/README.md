@@ -13,12 +13,33 @@ ecs-dev run examples/simple-nginx.json
 ```
 
 ### multi-container.json
-Multi-container task with Redis and Nginx, demonstrating dependencies.
+Multi-container task with Redis and Nginx, demonstrating container networking and dependencies.
 
 ```bash
 ecs-dev run examples/multi-container.json
 # Redis: 6379, Nginx: 8080
+# The web container can access redis via hostname "redis"
 ```
+
+### network-test.json
+Simple network connectivity test with nginx server and alpine client.
+
+```bash
+ecs-dev run examples/network-test.json
+# Watch the client container logs to see it successfully connect to the server container
+ecs-dev logs client -f
+```
+
+## Networking
+
+Each task gets its own Docker bridge network, enabling container-to-container communication:
+
+- All containers in a task are connected to the same network
+- Containers can communicate using their container names as hostnames
+- DNS resolution is handled automatically
+- Networks are cleaned up when tasks are removed
+
+Example: If you have containers named "web" and "redis" in the same task, the web container can connect to Redis at `redis:6379`.
 
 ## Creating Your Own Task Definitions
 

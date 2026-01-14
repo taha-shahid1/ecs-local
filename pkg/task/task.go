@@ -16,6 +16,8 @@ type Task struct {
 	ID          string
 	Family      string
 	Containers  map[string]string // containerName -> containerID
+	NetworkID   string
+	NetworkName string
 	Status      string
 	StartedAt   time.Time
 	Definition  *parser.TaskDefinition
@@ -38,17 +40,33 @@ func NewManager(dockerClient *docker.Client) *Manager {
 // RunTask creates and starts containers for a task definition
 func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (*Task, error) {
 	taskID := generateTaskID(taskDef.Family)
+	networkName := fmt.Sprintf("ecs-local-%s", taskID)
 
 	task := &Task{
-		ID:         taskID,
-		Family:     taskDef.Family,
-		Containers: make(map[string]string),
-		Status:     "PROVISIONING",
-		StartedAt:  time.Now(),
-		Definition: taskDef,
+		ID:          taskID,
+		Family:      taskDef.Family,
+		Containers:  make(map[string]string),
+		NetworkName: networkName,
+		Status:      "PROVISIONING",
+		StartedAt:   time.Now(),
+		Definition:  taskDef,
 	}
 
 	m.tasks[taskID] = task
+
+	networkID, err := m.dockerClient.CreateNetwork(ctx, networkName)
+	if err != nil {
+		task.Status = "FAILED"
+		return nil, fmt.Errorf("failed to create network: %w", err)
+	}
+	task.NetworkID = networkID
+	fmt.Printf("Created network: %s (%s)\n", networkName, networkID[:12])
+
+	defer func() {
+		if task.Status == "FAILED" {
+			m.cleanupFailedTask(ctx, task)
+		}
+	}()
 
 	// Pull all images first
 	for _, containerDef := range taskDef.ContainerDefinitions {
@@ -73,6 +91,14 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 		task.Containers[containerDef.Name] = containerID
 
 		fmt.Printf("Created container: %s (%s)\n", containerDef.Name, containerID[:12])
+
+		aliases := []string{containerDef.Name}
+		err = m.dockerClient.ConnectContainerToNetwork(ctx, networkID, containerID, aliases)
+		if err != nil {
+			task.Status = "FAILED"
+			return nil, fmt.Errorf("failed to connect container %s to network: %w", containerDef.Name, err)
+		}
+		fmt.Printf("Connected %s to network %s\n", containerDef.Name, networkName)
 	}
 
 	// Start containers
@@ -124,6 +150,15 @@ func (m *Manager) RemoveTask(ctx context.Context, taskID string) error {
 			fmt.Printf("Warning: failed to remove container %s: %v\n", name, err)
 		} else {
 			fmt.Printf("Removed container: %s\n", name)
+		}
+	}
+
+	if task.NetworkID != "" {
+		err := m.dockerClient.RemoveNetwork(ctx, task.NetworkID)
+		if err != nil {
+			fmt.Printf("Warning: failed to remove network %s: %v\n", task.NetworkName, err)
+		} else {
+			fmt.Printf("Removed network: %s\n", task.NetworkName)
 		}
 	}
 
@@ -195,4 +230,21 @@ func convertToDockerConfig(taskID string, containerDef parser.ContainerDefinitio
 func generateTaskID(family string) string {
 	timestamp := time.Now().Unix()
 	return fmt.Sprintf("%s-%d", strings.ToLower(family), timestamp)
+}
+
+// cleanupFailedTask cleans up resources when task creation fails
+func (m *Manager) cleanupFailedTask(ctx context.Context, task *Task) {
+	for name, containerID := range task.Containers {
+		err := m.dockerClient.RemoveContainer(ctx, containerID, true)
+		if err != nil {
+			fmt.Printf("Warning: failed to cleanup container %s: %v\n", name, err)
+		}
+	}
+
+	if task.NetworkID != "" {
+		err := m.dockerClient.RemoveNetwork(ctx, task.NetworkID)
+		if err != nil {
+			fmt.Printf("Warning: failed to cleanup network %s: %v\n", task.NetworkName, err)
+		}
+	}
 }
