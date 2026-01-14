@@ -60,7 +60,7 @@ func ExampleClient_CreateContainer() {
 	}()
 }
 
-func ExampleClient_ContainerLifecycle() {
+func Example_containerLifecycle() {
 	client, err := docker.NewClient()
 	if err != nil {
 		log.Fatalf("Failed to create Docker client: %v", err)
