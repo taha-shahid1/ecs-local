@@ -48,6 +48,9 @@ func main() {
 
 	rootCmd.AddCommand(runCmd())
 	rootCmd.AddCommand(psCmd())
+	rootCmd.AddCommand(logsCmd())
+	rootCmd.AddCommand(stopCmd())
+	rootCmd.AddCommand(rmCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -132,6 +135,189 @@ func psCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&showAll, "all", "a", false, "Show all tasks including stopped")
+
+	return cmd
+}
+
+func logsCmd() *cobra.Command {
+	var (
+		follow     bool
+		timestamps bool
+		tail       string
+		taskID     string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "logs <container-name>",
+		Short: "View container logs",
+		Long:  "Stream logs from a container. Use --task to view logs from all containers in a task.",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if taskID != "" {
+				return nil
+			}
+			if len(args) != 1 {
+				return fmt.Errorf("requires container-name argument or --task flag")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+
+			if taskID != "" {
+				// Get task and stream logs from all containers
+				task, err := taskManager.GetTask(taskID)
+				if err != nil {
+					return fmt.Errorf("task not found: %s", taskID)
+				}
+
+				containerIDs := make([]string, 0, len(task.Containers))
+				for _, id := range task.Containers {
+					containerIDs = append(containerIDs, id)
+				}
+
+				fmt.Printf("Streaming logs from %d container(s) in task %s\n", len(containerIDs), taskID)
+				fmt.Println("Press Ctrl+C to exit")
+				fmt.Println()
+
+				return dockerClient.StreamMultipleLogs(ctx, containerIDs, follow)
+			}
+
+			// Single container logs
+			containerName := args[0]
+
+			// Try to find container by name in all tasks
+			var containerID string
+			for _, task := range taskManager.ListTasks() {
+				if id, exists := task.Containers[containerName]; exists {
+					containerID = id
+					break
+				}
+			}
+
+			if containerID == "" {
+				return fmt.Errorf("container not found: %s", containerName)
+			}
+
+			opts := docker.LogOptions{
+				Follow:     follow,
+				Timestamps: timestamps,
+				Tail:       tail,
+			}
+
+			return dockerClient.StreamLogs(ctx, containerID, opts)
+		},
+	}
+
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output")
+	cmd.Flags().BoolVarP(&timestamps, "timestamps", "t", false, "Show timestamps")
+	cmd.Flags().StringVar(&tail, "tail", "all", "Number of lines to show from the end")
+	cmd.Flags().StringVar(&taskID, "task", "", "Show logs from all containers in a task")
+
+	return cmd
+}
+
+func stopCmd() *cobra.Command {
+	var stopAll bool
+
+	cmd := &cobra.Command{
+		Use:   "stop [task-id]",
+		Short: "Stop a running task",
+		Long:  "Stop all containers in a task. Use --all to stop all tasks.",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if stopAll {
+				return nil
+			}
+			if len(args) != 1 {
+				return fmt.Errorf("requires task-id argument or --all flag")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+
+			if stopAll {
+				tasks := taskManager.ListTasks()
+				if len(tasks) == 0 {
+					fmt.Println("No tasks to stop")
+					return nil
+				}
+
+				fmt.Printf("Stopping %d task(s)...\n", len(tasks))
+				for _, t := range tasks {
+					if t.Status == "STOPPED" {
+						continue
+					}
+
+					err := taskManager.StopTask(ctx, t.ID)
+					if err != nil {
+						fmt.Printf("Warning: failed to stop task %s: %v\n", t.ID, err)
+					} else {
+						fmt.Printf("✓ Stopped task: %s\n", t.ID)
+					}
+				}
+				return nil
+			}
+
+			taskID := args[0]
+			err := taskManager.StopTask(ctx, taskID)
+			if err != nil {
+				return fmt.Errorf("failed to stop task: %w", err)
+			}
+
+			fmt.Printf("✓ Task stopped: %s\n", taskID)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&stopAll, "all", false, "Stop all running tasks")
+
+	return cmd
+}
+
+func rmCmd() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "rm <task-id>",
+		Short: "Remove a stopped task",
+		Long:  "Remove all containers associated with a task. Use -f to force remove running tasks.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			taskID := args[0]
+
+			// Check if task exists
+			task, err := taskManager.GetTask(taskID)
+			if err != nil {
+				return fmt.Errorf("task not found: %s", taskID)
+			}
+
+			// If not forcing and task is running, warn
+			if !force && task.Status == "RUNNING" {
+				return fmt.Errorf("task is still running. Stop it first or use -f to force remove")
+			}
+
+			// Stop if running
+			if task.Status == "RUNNING" {
+				fmt.Printf("Stopping task %s...\n", taskID)
+				err := taskManager.StopTask(ctx, taskID)
+				if err != nil {
+					return fmt.Errorf("failed to stop task: %w", err)
+				}
+			}
+
+			// Remove
+			err = taskManager.RemoveTask(ctx, taskID)
+			if err != nil {
+				return fmt.Errorf("failed to remove task: %w", err)
+			}
+
+			fmt.Printf("✓ Task removed: %s\n", taskID)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove running task")
 
 	return cmd
 }

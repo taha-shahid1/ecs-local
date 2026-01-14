@@ -44,21 +44,23 @@ ecs-dev run task-definition.json
 
 # List running tasks
 ecs-dev ps
+ecs-dev ps -a  # Show all tasks including stopped
 
-# View container logs
+# View logs
 ecs-dev logs <container-name>
-
-# Follow container logs
-ecs-dev logs -f <container-name>
+ecs-dev logs -f <container-name>  # Follow logs
+ecs-dev logs --task <task-id>     # All containers in task
+ecs-dev logs -f --task <task-id>  # Follow all containers
 
 # Stop a task
-ecs-dev stop <task-name>
+ecs-dev stop <task-id>
 
 # Stop all tasks
 ecs-dev stop --all
 
 # Remove a stopped task
-ecs-dev rm <task-name>
+ecs-dev rm <task-id>
+ecs-dev rm -f <task-id>  # Force remove running task
 
 # Show version
 ecs-dev --version
