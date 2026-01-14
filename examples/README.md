@@ -38,6 +38,14 @@ ecs-dev run examples/dependency-test.json
 # Init container runs first and completes, then app starts
 ```
 
+### healthcheck-test.json
+Tests container health checks.
+
+```bash
+ecs-dev run examples/healthcheck-test.json
+# Nginx with health check that verifies HTTP endpoint
+```
+
 ## Networking
 
 Each task gets its own Docker bridge network, enabling container-to-container communication:
@@ -56,8 +64,28 @@ Control the startup order of containers using the `dependsOn` field:
 - **START**: Wait for dependency to be running
 - **COMPLETE**: Wait for dependency to exit (any exit code)
 - **SUCCESS**: Wait for dependency to exit with code 0
+- **HEALTHY**: Wait for dependency to pass health checks
 
 Dependencies are validated at startup. Circular dependencies and missing containers are detected and rejected.
+
+## Health Checks
+
+Configure health checks to monitor container health:
+
+```json
+"healthCheck": {
+  "command": ["CMD-SHELL", "wget -q --spider http://localhost || exit 1"],
+  "interval": 10,
+  "timeout": 5,
+  "retries": 3,
+  "startPeriod": 5
+}
+```
+
+Health status is shown in the `ps` command output with color coding:
+- Green: healthy
+- Yellow: starting
+- Red: unhealthy
 
 ## Creating Your Own Task Definitions
 

@@ -110,7 +110,7 @@ func (m *Manager) waitForCondition(ctx context.Context, containerID string, cond
 	case "SUCCESS":
 		return m.waitForSuccess(ctx, containerID)
 	case "HEALTHY":
-		return fmt.Errorf("HEALTHY condition not yet implemented")
+		return m.waitForHealthy(ctx, containerID)
 	default:
 		return fmt.Errorf("unknown condition: %s", condition)
 	}
@@ -196,6 +196,42 @@ func (m *Manager) waitForSuccess(ctx context.Context, containerID string) error 
 				}
 
 				return fmt.Errorf("container exited with non-zero exit code: %d", inspect.State.ExitCode)
+			}
+		}
+	}
+}
+
+func (m *Manager) waitForHealthy(ctx context.Context, containerID string) error {
+	if err := m.waitForStart(ctx, containerID); err != nil {
+		return err
+	}
+
+	timeout := time.After(2 * time.Minute)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for container to become healthy")
+		case <-ticker.C:
+			health, err := m.dockerClient.GetContainerHealth(ctx, containerID)
+			if err != nil {
+				return err
+			}
+
+			if health == "none" {
+				return fmt.Errorf("container does not have a health check configured")
+			}
+
+			if health == "healthy" {
+				return nil
+			}
+
+			if health == "unhealthy" {
+				return fmt.Errorf("container is unhealthy")
 			}
 		}
 	}

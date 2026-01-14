@@ -106,6 +106,7 @@ func psCmd() *cobra.Command {
 		Short: "List running tasks",
 		Long:  "Display all tasks managed by ecs-dev",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
 			tasks := taskManager.ListTasks()
 
 			if len(tasks) == 0 {
@@ -113,20 +114,22 @@ func psCmd() *cobra.Command {
 				return nil
 			}
 
-			fmt.Printf("%-25s %-20s %-15s %-10s %-30s %s\n", "TASK ID", "FAMILY", "STATUS", "CONTAINERS", "NETWORK", "STARTED")
-			fmt.Println("-------------------------------------------------------------------------------------------------------------------")
+			fmt.Printf("%-25s %-20s %-15s %-10s %-15s %s\n", "TASK ID", "FAMILY", "STATUS", "CONTAINERS", "HEALTH", "STARTED")
+			fmt.Println("-------------------------------------------------------------------------------------------------------")
 
 			for _, t := range tasks {
 				if !showAll && t.Status == "STOPPED" {
 					continue
 				}
 
-				fmt.Printf("%-25s %-20s %-15s %-10d %-30s %s\n",
+				healthStatus := getTaskHealthStatus(ctx, t)
+
+				fmt.Printf("%-25s %-20s %-15s %-10d %-15s %s\n",
 					t.ID,
 					t.Family,
 					t.Status,
 					len(t.Containers),
-					t.NetworkName,
+					healthStatus,
 					t.StartedAt.Format("2006-01-02 15:04:05"),
 				)
 			}
@@ -138,6 +141,40 @@ func psCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&showAll, "all", "a", false, "Show all tasks including stopped")
 
 	return cmd
+}
+
+func getTaskHealthStatus(ctx context.Context, t *task.Task) string {
+	if len(t.Containers) == 0 {
+		return ""
+	}
+
+	healthStatuses := make(map[string]int)
+	hasHealthChecks := false
+
+	for _, containerID := range t.Containers {
+		health, err := dockerClient.GetContainerHealth(ctx, containerID)
+		if err != nil || health == "none" {
+			continue
+		}
+		hasHealthChecks = true
+		healthStatuses[health]++
+	}
+
+	if !hasHealthChecks {
+		return ""
+	}
+
+	if healthStatuses["unhealthy"] > 0 {
+		return "\033[31munhealthy\033[0m"
+	}
+	if healthStatuses["starting"] > 0 {
+		return "\033[33mstarting\033[0m"
+	}
+	if healthStatuses["healthy"] > 0 {
+		return "\033[32mhealthy\033[0m"
+	}
+
+	return ""
 }
 
 func logsCmd() *cobra.Command {

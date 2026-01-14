@@ -245,6 +245,28 @@ func convertToDockerConfig(taskID string, containerDef parser.ContainerDefinitio
 		config.PortMap[containerPort] = hostPort
 	}
 
+	// Health check
+	if containerDef.HealthCheck != nil {
+		hc := containerDef.HealthCheck
+		config.HealthCheck = &docker.HealthCheckConfig{
+			Test:        hc.Command,
+			Interval:    int64(hc.Interval) * 1000000000,
+			Timeout:     int64(hc.Timeout) * 1000000000,
+			Retries:     hc.Retries,
+			StartPeriod: int64(hc.StartPeriod) * 1000000000,
+		}
+
+		if config.HealthCheck.Interval == 0 {
+			config.HealthCheck.Interval = 30 * 1000000000
+		}
+		if config.HealthCheck.Timeout == 0 {
+			config.HealthCheck.Timeout = 5 * 1000000000
+		}
+		if config.HealthCheck.Retries == 0 {
+			config.HealthCheck.Retries = 3
+		}
+	}
+
 	return config
 }
 

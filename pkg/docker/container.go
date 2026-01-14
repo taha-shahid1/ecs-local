@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -17,9 +18,19 @@ type ContainerConfig struct {
 	Env         []string
 	Cmd         []string
 	Entrypoint  []string
-	Memory      int64  // in bytes
-	CPU         int64  // CPU shares
-	PortMap     map[string]string // containerPort -> hostPort
+	Memory      int64
+	CPU         int64
+	PortMap     map[string]string
+	HealthCheck *HealthCheckConfig
+}
+
+// HealthCheckConfig represents health check configuration
+type HealthCheckConfig struct {
+	Test        []string
+	Interval    int64
+	Timeout     int64
+	Retries     int
+	StartPeriod int64
 }
 
 // CreateContainer creates a new container with the specified configuration
@@ -56,6 +67,16 @@ func (c *Client) CreateContainer(ctx context.Context, config ContainerConfig) (s
 
 	if len(config.Entrypoint) > 0 {
 		containerCfg.Entrypoint = config.Entrypoint
+	}
+
+	if config.HealthCheck != nil {
+		containerCfg.Healthcheck = &container.HealthConfig{
+			Test:        config.HealthCheck.Test,
+			Interval:    time.Duration(config.HealthCheck.Interval),
+			Timeout:     time.Duration(config.HealthCheck.Timeout),
+			Retries:     config.HealthCheck.Retries,
+			StartPeriod: time.Duration(config.HealthCheck.StartPeriod),
+		}
 	}
 
 	// Build host config with resource limits
@@ -141,4 +162,18 @@ func (c *Client) GetContainerInspect(ctx context.Context, containerID string) (t
 		return types.ContainerJSON{}, fmt.Errorf("failed to inspect container: %w", err)
 	}
 	return inspect, nil
+}
+
+// GetContainerHealth returns the health status of a container
+func (c *Client) GetContainerHealth(ctx context.Context, containerID string) (string, error) {
+	inspect, err := c.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	if inspect.State.Health == nil {
+		return "none", nil
+	}
+
+	return inspect.State.Health.Status, nil
 }

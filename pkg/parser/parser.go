@@ -33,6 +33,7 @@ type ContainerDefinition struct {
 	PortMappings      []PortMapping          `json:"portMappings,omitempty"`
 	DependsOn         []ContainerDependency  `json:"dependsOn,omitempty"`
 	Links             []string               `json:"links,omitempty"`
+	HealthCheck       *HealthCheck           `json:"healthCheck,omitempty"`
 	LogConfiguration  *LogConfiguration      `json:"logConfiguration,omitempty"`
 	MountPoints       []MountPoint           `json:"mountPoints,omitempty"`
 }
@@ -54,6 +55,15 @@ type PortMapping struct {
 type ContainerDependency struct {
 	ContainerName string `json:"containerName"`
 	Condition     string `json:"condition"`
+}
+
+// HealthCheck represents container health check configuration
+type HealthCheck struct {
+	Command     []string `json:"command"`
+	Interval    int      `json:"interval,omitempty"`
+	Timeout     int      `json:"timeout,omitempty"`
+	Retries     int      `json:"retries,omitempty"`
+	StartPeriod int      `json:"startPeriod,omitempty"`
 }
 
 // LogConfiguration represents logging configuration
