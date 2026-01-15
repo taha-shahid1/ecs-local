@@ -51,6 +51,7 @@ func main() {
 	rootCmd.AddCommand(logsCmd())
 	rootCmd.AddCommand(stopCmd())
 	rootCmd.AddCommand(rmCmd())
+	rootCmd.AddCommand(execCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -356,6 +357,99 @@ func rmCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove running task")
+
+	return cmd
+}
+
+func execCmd() *cobra.Command {
+	var (
+		interactive bool
+		user        string
+		workdir     string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "exec <container-name> <command> [args...]",
+		Short: "Execute a command in a running container",
+		Long:  "Run a command inside a running container. Use -i for interactive shell.",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			containerName := args[0]
+			command := args[1:]
+
+			var containerID string
+			found := false
+
+			for _, t := range taskManager.ListTasks() {
+				if t.Status != "RUNNING" {
+					continue
+				}
+
+				if id, exists := t.Containers[containerName]; exists {
+					containerID = id
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				for _, t := range taskManager.ListTasks() {
+					for cName, cID := range t.Containers {
+						fullContainerName := fmt.Sprintf("%s-%s", t.ID, cName)
+						if fullContainerName == containerName {
+							containerID = cID
+							found = true
+							break
+						}
+					}
+					if found {
+						break
+					}
+				}
+
+				if !found {
+					id, err := dockerClient.GetContainerID(ctx, containerName)
+					if err != nil {
+						return fmt.Errorf("container not found: %s", containerName)
+					}
+					containerID = id
+				}
+			}
+
+			if interactive {
+				execConfig := docker.ExecConfig{
+					ContainerID: containerID,
+					Cmd:         command,
+					Interactive: true,
+					Tty:         true,
+					WorkingDir:  workdir,
+					User:        user,
+				}
+
+				return dockerClient.ExecInteractive(ctx, execConfig)
+			}
+
+			exitCode, err := dockerClient.ExecWithIO(ctx, containerID, command, docker.ContainerExecAttachOptions{
+				Stdout: os.Stdout,
+				Stderr: os.Stderr,
+			})
+
+			if err != nil {
+				return err
+			}
+
+			if exitCode != 0 {
+				os.Exit(exitCode)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Keep STDIN open and allocate a pseudo-TTY")
+	cmd.Flags().StringVarP(&user, "user", "u", "", "Username or UID")
+	cmd.Flags().StringVarP(&workdir, "workdir", "w", "", "Working directory inside the container")
 
 	return cmd
 }

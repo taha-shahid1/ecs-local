@@ -18,6 +18,7 @@ type Task struct {
 	Containers  map[string]string // containerName -> containerID
 	NetworkID   string
 	NetworkName string
+	Volumes     []string
 	Status      string
 	StartedAt   time.Time
 	Definition  *parser.TaskDefinition
@@ -68,6 +69,24 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 		}
 	}()
 
+	// Create named volumes
+	volumeMap := make(map[string]string)
+	for _, vol := range taskDef.Volumes {
+		if vol.Host == nil || vol.Host.SourcePath == "" {
+			volumeName := fmt.Sprintf("ecs-local-%s-%s", taskID, vol.Name)
+			_, err := m.dockerClient.CreateVolume(ctx, volumeName)
+			if err != nil {
+				task.Status = "FAILED"
+				return nil, fmt.Errorf("failed to create volume %s: %w", vol.Name, err)
+			}
+			task.Volumes = append(task.Volumes, volumeName)
+			volumeMap[vol.Name] = volumeName
+			fmt.Printf("Created volume: %s\n", volumeName)
+		} else {
+			volumeMap[vol.Name] = vol.Host.SourcePath
+		}
+	}
+
 	// Pull all images first
 	for _, containerDef := range taskDef.ContainerDefinitions {
 		fmt.Printf("Pulling image: %s\n", containerDef.Image)
@@ -87,7 +106,7 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 
 	// Create all containers first (don't start yet)
 	for _, containerDef := range taskDef.ContainerDefinitions {
-		containerConfig := convertToDockerConfig(taskID, containerDef)
+		containerConfig := convertToDockerConfig(taskID, containerDef, volumeMap)
 
 		containerID, err := m.dockerClient.CreateContainer(ctx, containerConfig)
 		if err != nil {
@@ -184,6 +203,15 @@ func (m *Manager) RemoveTask(ctx context.Context, taskID string) error {
 		}
 	}
 
+	for _, volumeName := range task.Volumes {
+		err := m.dockerClient.RemoveVolume(ctx, volumeName, false)
+		if err != nil {
+			fmt.Printf("Warning: failed to remove volume %s: %v\n", volumeName, err)
+		} else {
+			fmt.Printf("Removed volume: %s\n", volumeName)
+		}
+	}
+
 	delete(m.tasks, taskID)
 	return nil
 }
@@ -207,7 +235,7 @@ func (m *Manager) ListTasks() []*Task {
 }
 
 // convertToDockerConfig converts a parser.ContainerDefinition to docker.ContainerConfig
-func convertToDockerConfig(taskID string, containerDef parser.ContainerDefinition) docker.ContainerConfig {
+func convertToDockerConfig(taskID string, containerDef parser.ContainerDefinition, volumeMap map[string]string) docker.ContainerConfig {
 	config := docker.ContainerConfig{
 		Name:  fmt.Sprintf("%s-%s", taskID, containerDef.Name),
 		Image: containerDef.Image,
@@ -267,6 +295,26 @@ func convertToDockerConfig(taskID string, containerDef parser.ContainerDefinitio
 		}
 	}
 
+	// Mount points
+	for _, mountPoint := range containerDef.MountPoints {
+		source, exists := volumeMap[mountPoint.SourceVolume]
+		if !exists {
+			continue
+		}
+
+		mountType := "volume"
+		if source[0] == '/' || source[0] == '.' {
+			mountType = "bind"
+		}
+
+		config.Mounts = append(config.Mounts, docker.MountConfig{
+			Source:   source,
+			Target:   mountPoint.ContainerPath,
+			ReadOnly: mountPoint.ReadOnly,
+			Type:     mountType,
+		})
+	}
+
 	return config
 }
 
@@ -289,6 +337,13 @@ func (m *Manager) cleanupFailedTask(ctx context.Context, task *Task) {
 		err := m.dockerClient.RemoveNetwork(ctx, task.NetworkID)
 		if err != nil {
 			fmt.Printf("Warning: failed to cleanup network %s: %v\n", task.NetworkName, err)
+		}
+	}
+
+	for _, volumeName := range task.Volumes {
+		err := m.dockerClient.RemoveVolume(ctx, volumeName, true)
+		if err != nil {
+			fmt.Printf("Warning: failed to cleanup volume %s: %v\n", volumeName, err)
 		}
 	}
 }

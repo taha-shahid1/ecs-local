@@ -327,7 +327,7 @@ func TestConvertToDockerConfig(t *testing.T) {
 		EntryPoint: []string{"/bin/sh"},
 	}
 
-	config := convertToDockerConfig("task-123", containerDef)
+	config := convertToDockerConfig("task-123", containerDef, make(map[string]string))
 
 	if config.Image != "nginx:alpine" {
 		t.Errorf("expected image nginx:alpine, got %s", config.Image)

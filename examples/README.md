@@ -46,6 +46,14 @@ ecs-dev run examples/healthcheck-test.json
 # Nginx with health check that verifies HTTP endpoint
 ```
 
+### volume-test.json
+Tests Docker volume sharing between containers.
+
+```bash
+ecs-dev run examples/volume-test.json
+# Writer creates a file in shared volume, reader reads it
+```
+
 ## Networking
 
 Each task gets its own Docker bridge network, enabling container-to-container communication:
@@ -86,6 +94,70 @@ Health status is shown in the `ps` command output with color coding:
 - Green: healthy
 - Yellow: starting
 - Red: unhealthy
+
+## Volumes
+
+Define volumes for persistent data storage:
+
+**Named volumes** (managed by Docker):
+```json
+"volumes": [
+  {
+    "name": "data-volume"
+  }
+]
+```
+
+**Bind mounts** (host directories):
+```json
+"volumes": [
+  {
+    "name": "host-data",
+    "host": {
+      "sourcePath": "/path/on/host"
+    }
+  }
+]
+```
+
+Mount volumes in containers:
+```json
+"mountPoints": [
+  {
+    "sourceVolume": "data-volume",
+    "containerPath": "/data",
+    "readOnly": false
+  }
+]
+```
+
+Named volumes are automatically created and cleaned up with the task.
+
+## Executing Commands
+
+Run commands inside running containers:
+
+```bash
+# Simple command
+ecs-dev exec <container-name> whoami
+
+# Command with arguments (use -- for commands with flags)
+ecs-dev exec <container-name> -- ls -la /app
+
+# Interactive shell
+ecs-dev exec -i <container-name> sh
+
+# Execute as specific user
+ecs-dev exec -u nginx <container-name> whoami
+
+# Set working directory
+ecs-dev exec -w /app <container-name> pwd
+```
+
+The container name can be:
+- Just the container name (e.g., `web`)
+- Full container name (e.g., `task-id-web`)
+- Any Docker container name
 
 ## Creating Your Own Task Definitions
 

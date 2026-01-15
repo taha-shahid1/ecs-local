@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 )
@@ -22,6 +23,15 @@ type ContainerConfig struct {
 	CPU         int64
 	PortMap     map[string]string
 	HealthCheck *HealthCheckConfig
+	Mounts      []MountConfig
+}
+
+// MountConfig represents a volume mount
+type MountConfig struct {
+	Source   string
+	Target   string
+	ReadOnly bool
+	Type     string
 }
 
 // HealthCheckConfig represents health check configuration
@@ -79,9 +89,26 @@ func (c *Client) CreateContainer(ctx context.Context, config ContainerConfig) (s
 		}
 	}
 
+	// Build mounts
+	var mounts []mount.Mount
+	for _, m := range config.Mounts {
+		mountType := mount.TypeBind
+		if m.Type == "volume" {
+			mountType = mount.TypeVolume
+		}
+
+		mounts = append(mounts, mount.Mount{
+			Type:     mountType,
+			Source:   m.Source,
+			Target:   m.Target,
+			ReadOnly: m.ReadOnly,
+		})
+	}
+
 	// Build host config with resource limits
 	hostCfg := &container.HostConfig{
 		PortBindings: portBindings,
+		Mounts:       mounts,
 	}
 
 	if config.Memory > 0 {

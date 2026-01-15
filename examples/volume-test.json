@@ -1,0 +1,46 @@
+{
+  "family": "volume-test",
+  "volumes": [
+    {
+      "name": "data-volume"
+    }
+  ],
+  "containerDefinitions": [
+    {
+      "name": "writer",
+      "image": "alpine:latest",
+      "memory": 128,
+      "cpu": 64,
+      "essential": false,
+      "command": ["sh", "-c", "echo 'Hello from writer' > /data/message.txt && cat /data/message.txt && sleep 2"],
+      "mountPoints": [
+        {
+          "sourceVolume": "data-volume",
+          "containerPath": "/data",
+          "readOnly": false
+        }
+      ]
+    },
+    {
+      "name": "reader",
+      "image": "alpine:latest",
+      "memory": 128,
+      "cpu": 64,
+      "essential": true,
+      "command": ["sh", "-c", "sleep 3 && cat /data/message.txt && sleep 300"],
+      "mountPoints": [
+        {
+          "sourceVolume": "data-volume",
+          "containerPath": "/data",
+          "readOnly": true
+        }
+      ],
+      "dependsOn": [
+        {
+          "containerName": "writer",
+          "condition": "COMPLETE"
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,7 @@ An open-source tool to simulate Amazon ECS (Elastic Container Service) locally u
 - Run containers using Docker SDK
 - List running tasks and containers
 - Stream and follow container logs
+- Execute commands in running containers
 - Handle resource limits (CPU, memory)
 - Port mappings and environment variables
 
@@ -26,6 +27,8 @@ An open-source tool to simulate Amazon ECS (Elastic Container Service) locally u
 - **Failure handling** - Stop task startup when dependencies fail
 - **Health checks** - Monitor container health with configurable checks
 - **Health status display** - Color-coded health status in ps command
+- **Volume support** - Named volumes and bind mounts for persistent data
+- **Volume lifecycle** - Automatic creation and cleanup of named volumes
 
 ## Prerequisites
 
@@ -62,6 +65,12 @@ ecs-dev logs <container-name>
 ecs-dev logs -f <container-name>  # Follow logs
 ecs-dev logs --task <task-id>     # All containers in task
 ecs-dev logs -f --task <task-id>  # Follow all containers
+
+# Execute commands in containers
+ecs-dev exec <container-name> <command> [args...]
+ecs-dev exec <container-name> -- ls -la /app  # Use -- for commands with flags
+ecs-dev exec -i <container-name> sh           # Interactive shell
+ecs-dev exec -u nginx <container-name> whoami # Execute as specific user
 
 # Stop a task
 ecs-dev stop <task-id>
