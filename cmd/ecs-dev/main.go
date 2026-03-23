@@ -52,6 +52,7 @@ func main() {
 	rootCmd.AddCommand(stopCmd())
 	rootCmd.AddCommand(rmCmd())
 	rootCmd.AddCommand(execCmd())
+	rootCmd.AddCommand(depsCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -59,6 +60,9 @@ func main() {
 }
 
 func runCmd() *cobra.Command {
+	var noCascade bool
+	var dependencyTimeout int
+
 	cmd := &cobra.Command{
 		Use:   "run <task-definition.json>",
 		Short: "Run a task from a task definition file",
@@ -76,6 +80,12 @@ func runCmd() *cobra.Command {
 
 			fmt.Printf("Task family: %s\n", taskDef.Family)
 			fmt.Printf("Containers: %d\n\n", len(taskDef.ContainerDefinitions))
+
+			// Configure cascade failure behavior
+			taskManager.SetCascadeOnFailure(!noCascade)
+			if noCascade {
+				fmt.Println("Cascade failure disabled - dependent containers will continue running if dependencies fail")
+			}
 
 			// Run the task
 			ctx := context.Background()
@@ -96,11 +106,15 @@ func runCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVar(&noCascade, "no-cascade", false, "Don't stop dependent containers when a dependency fails")
+	cmd.Flags().IntVar(&dependencyTimeout, "dependency-timeout", 0, "Timeout in seconds for dependency conditions (0 = use defaults)")
+
 	return cmd
 }
 
 func psCmd() *cobra.Command {
 	var showAll bool
+	var showDeps bool
 
 	cmd := &cobra.Command{
 		Use:   "ps",
@@ -112,6 +126,23 @@ func psCmd() *cobra.Command {
 
 			if len(tasks) == 0 {
 				fmt.Println("No tasks running")
+				return nil
+			}
+
+			if showDeps {
+				// Show detailed dependency information
+				for _, t := range tasks {
+					if !showAll && t.Status == "STOPPED" {
+						continue
+					}
+					info, err := taskManager.GetTaskDependencyInfo(t.ID)
+					if err != nil {
+						fmt.Printf("Error getting dependency info for task %s: %v\n", t.ID, err)
+						continue
+					}
+					fmt.Println(info.FormatDependencyGraph())
+					fmt.Println()
+				}
 				return nil
 			}
 
@@ -140,6 +171,7 @@ func psCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&showAll, "all", "a", false, "Show all tasks including stopped")
+	cmd.Flags().BoolVarP(&showDeps, "deps", "d", false, "Show detailed dependency information")
 
 	return cmd
 }
@@ -450,6 +482,48 @@ func execCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Keep STDIN open and allocate a pseudo-TTY")
 	cmd.Flags().StringVarP(&user, "user", "u", "", "Username or UID")
 	cmd.Flags().StringVarP(&workdir, "workdir", "w", "", "Working directory inside the container")
+
+	return cmd
+}
+
+func depsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "deps [task-id]",
+		Short: "Show dependency information for tasks",
+		Long:  "Display dependency graph and waiting status for containers in a task",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			tasks := taskManager.ListTasks()
+
+			if len(tasks) == 0 {
+				fmt.Println("No tasks running")
+				return nil
+			}
+
+			if len(args) == 0 {
+				// Show dependency info for all tasks
+				for _, t := range tasks {
+					info, err := taskManager.GetTaskDependencyInfo(t.ID)
+					if err != nil {
+						fmt.Printf("Error getting dependency info for task %s: %v\n", t.ID, err)
+						continue
+					}
+					fmt.Println(info.FormatDependencyGraph())
+					fmt.Println()
+				}
+			} else {
+				// Show dependency info for specific task
+				taskID := args[0]
+				info, err := taskManager.GetTaskDependencyInfo(taskID)
+				if err != nil {
+					return fmt.Errorf("failed to get dependency info: %w", err)
+				}
+				fmt.Println(info.FormatDependencyGraph())
+			}
+
+			return nil
+		},
+	}
 
 	return cmd
 }
