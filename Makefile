@@ -16,12 +16,12 @@ install: build
 # Run tests
 test:
 	@echo "Running tests..."
-	@go test -v ./...
+	@go test -p 1 -v ./...
 
 # Run tests with coverage
 test-coverage:
 	@echo "Running tests with coverage..."
-	@go test -v -coverprofile=coverage.out ./...
+	@go test -p 1 -v -coverprofile=coverage.out ./...
 	@go tool cover -html=coverage.out -o coverage.html
 
 # Clean build artifacts
