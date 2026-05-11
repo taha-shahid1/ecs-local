@@ -39,7 +39,9 @@ func (c *Client) StreamLogs(ctx context.Context, containerID string, opts LogOpt
 	if err != nil {
 		return fmt.Errorf("failed to get container logs: %w", err)
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 
 	_, err = io.Copy(os.Stdout, reader)
 	return err
@@ -100,7 +102,7 @@ func (c *Client) StreamMultipleLogs(ctx context.Context, containerIDs []string, 
 
 		reader, err := c.cli.ContainerLogs(ctx, containerID, logOpts)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get logs for %s: %v\n", name, err)
+			_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to get logs for %s: %v\n", name, err)
 			continue
 		}
 
@@ -120,14 +122,16 @@ func (c *Client) StreamMultipleLogs(ctx context.Context, containerIDs []string, 
 	done := make(chan struct{})
 	for _, lr := range readers {
 		go func(logReader LogReader) {
-			defer logReader.Reader.Close()
+			defer func() {
+				_ = logReader.Reader.Close()
+			}()
 
 			buffer := make([]byte, 8192)
 			for {
 				n, err := logReader.Reader.Read(buffer)
 				if n > 0 {
 					timestamp := time.Now().Format("2006-01-02T15:04:05.000Z")
-					fmt.Fprintf(os.Stdout, "%s[%s]%s %s | %s",
+					fmt.Printf("%s[%s]%s %s | %s",
 						logReader.Color,
 						logReader.ContainerName,
 						reset,
@@ -137,7 +141,7 @@ func (c *Client) StreamMultipleLogs(ctx context.Context, containerIDs []string, 
 
 				if err != nil {
 					if err != io.EOF {
-						fmt.Fprintf(os.Stderr, "\nError reading logs from %s: %v\n", logReader.ContainerName, err)
+						_, _ = fmt.Fprintf(os.Stderr, "\nError reading logs from %s: %v\n", logReader.ContainerName, err)
 					}
 					break
 				}

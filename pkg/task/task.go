@@ -13,6 +13,22 @@ import (
 	"github.com/taha-shahid1/ecs-local/pkg/parser"
 )
 
+const (
+	taskStatusProvisioning = "PROVISIONING"
+	taskStatusRunning      = "RUNNING"
+	taskStatusStopping     = "STOPPING"
+	taskStatusStopped      = "STOPPED"
+	taskStatusFailed       = "FAILED"
+
+	containerStatusCreated = "created"
+	containerStatusRunning = "running"
+	containerStatusExited  = "exited"
+
+	healthStatusNone      = "none"
+	healthStatusHealthy   = "healthy"
+	healthStatusUnhealthy = "unhealthy"
+)
+
 // Task represents a running ECS task
 type Task struct {
 	ID          string
@@ -28,10 +44,10 @@ type Task struct {
 
 // Manager handles task lifecycle
 type Manager struct {
-	dockerClient    *docker.Client
-	tasks           map[string]*Task // taskID -> Task
-	containerStates map[string]*ContainerState // containerID -> state
-	statesMu        sync.RWMutex
+	dockerClient     *docker.Client
+	tasks            map[string]*Task           // taskID -> Task
+	containerStates  map[string]*ContainerState // containerID -> state
+	statesMu         sync.RWMutex
 	cascadeOnFailure bool // Whether to stop dependent containers when dependency fails
 }
 
@@ -60,7 +76,7 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 		Family:      taskDef.Family,
 		Containers:  make(map[string]string),
 		NetworkName: networkName,
-		Status:      "PROVISIONING",
+		Status:      taskStatusProvisioning,
 		StartedAt:   time.Now(),
 		Definition:  taskDef,
 	}
@@ -69,14 +85,14 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 
 	networkID, err := m.dockerClient.CreateNetwork(ctx, networkName)
 	if err != nil {
-		task.Status = "FAILED"
+		task.Status = taskStatusFailed
 		return nil, fmt.Errorf("failed to create network: %w", err)
 	}
 	task.NetworkID = networkID
 	fmt.Printf("Created network: %s (%s)\n", networkName, networkID[:12])
 
 	defer func() {
-		if task.Status == "FAILED" {
+		if task.Status == taskStatusFailed {
 			m.cleanupFailedTask(ctx, task)
 		}
 	}()
@@ -88,7 +104,7 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 			volumeName := fmt.Sprintf("ecs-local-%s-%s", taskID, vol.Name)
 			_, err := m.dockerClient.CreateVolume(ctx, volumeName)
 			if err != nil {
-				task.Status = "FAILED"
+				task.Status = taskStatusFailed
 				return nil, fmt.Errorf("failed to create volume %s: %w", vol.Name, err)
 			}
 			task.Volumes = append(task.Volumes, volumeName)
@@ -104,7 +120,7 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 		fmt.Printf("Pulling image: %s\n", containerDef.Image)
 		err := m.dockerClient.PullImage(ctx, containerDef.Image, true)
 		if err != nil {
-			task.Status = "FAILED"
+			task.Status = taskStatusFailed
 			return nil, fmt.Errorf("failed to pull image %s: %w", containerDef.Image, err)
 		}
 	}
@@ -113,10 +129,10 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 	log.Printf("Building dependency graph for task %s", taskID)
 	depGraph, err := buildDependencyGraph(taskDef.ContainerDefinitions)
 	if err != nil {
-		task.Status = "FAILED"
+		task.Status = taskStatusFailed
 		return nil, fmt.Errorf("failed to build dependency graph: %w", err)
 	}
-	
+
 	// Log dependency graph structure
 	log.Printf("Dependency graph built successfully:")
 	for name, deps := range depGraph.deps {
@@ -137,7 +153,7 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 
 		containerID, err := m.dockerClient.CreateContainer(ctx, containerConfig)
 		if err != nil {
-			task.Status = "FAILED"
+			task.Status = taskStatusFailed
 			return nil, fmt.Errorf("failed to create container %s: %w", containerDef.Name, err)
 		}
 
@@ -148,7 +164,7 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 		aliases := []string{containerDef.Name}
 		err = m.dockerClient.ConnectContainerToNetwork(ctx, networkID, containerID, aliases)
 		if err != nil {
-			task.Status = "FAILED"
+			task.Status = taskStatusFailed
 			return nil, fmt.Errorf("failed to connect container %s to network: %w", containerDef.Name, err)
 		}
 		fmt.Printf("Connected %s to network %s\n", containerDef.Name, networkName)
@@ -158,9 +174,9 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 	for _, containerID := range task.Containers {
 		m.statesMu.Lock()
 		m.containerStates[containerID] = &ContainerState{
-			Status:    "created",
+			Status:    containerStatusCreated,
 			ExitCode:  -1,
-			Health:    "none",
+			Health:    healthStatusNone,
 			LastCheck: time.Now(),
 		}
 		m.statesMu.Unlock()
@@ -172,16 +188,16 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 
 	for levelIdx, level := range startLevels {
 		log.Printf("Starting level %d: %v", levelIdx+1, level)
-		
+
 		// Start all containers in this level in parallel
 		var wg sync.WaitGroup
 		startErrors := make(chan error, len(level))
-		
+
 		for _, name := range level {
 			wg.Add(1)
 			go func(containerName string) {
 				defer wg.Done()
-				
+
 				containerID := task.Containers[containerName]
 				containerDef := depGraph.containers[containerName]
 
@@ -190,12 +206,12 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 					depContainerID := task.Containers[dep.ContainerName]
 					log.Printf("[%s] Waiting for dependency %s (condition: %s)...", containerName, dep.ContainerName, dep.Condition)
 					fmt.Printf("[%s] Waiting for %s (condition: %s)...\n", containerName, dep.ContainerName, dep.Condition)
-					
+
 					err := m.waitForCondition(ctx, depContainerID, dep.Condition, containerName)
 					if err != nil {
 						log.Printf("[%s] Dependency %s failed: %v", containerName, dep.ContainerName, err)
 						startErrors <- fmt.Errorf("dependency %s failed for container %s: %w", dep.ContainerName, containerName, err)
-						
+
 						// Handle cascade failure if enabled
 						if m.cascadeOnFailure {
 							m.handleDependencyFailure(ctx, task, containerName, depGraph)
@@ -212,9 +228,9 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 					startErrors <- fmt.Errorf("failed to start container %s: %w", containerName, err)
 					return
 				}
-				
+
 				// Update state
-				m.updateContainerState(containerID, "running", -1, "none")
+				m.updateContainerState(containerID, containerStatusRunning, -1, healthStatusNone)
 				log.Printf("[%s] Started successfully", containerName)
 				fmt.Printf("Started container: %s\n", containerName)
 			}(name)
@@ -230,12 +246,12 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 		}
 
 		if len(errors) > 0 {
-			task.Status = "FAILED"
+			task.Status = taskStatusFailed
 			return nil, fmt.Errorf("failed to start containers in level %d: %v", levelIdx+1, errors[0])
 		}
 	}
 
-	task.Status = "RUNNING"
+	task.Status = taskStatusRunning
 	return task, nil
 }
 
@@ -246,7 +262,7 @@ func (m *Manager) StopTask(ctx context.Context, taskID string) error {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
-	task.Status = "STOPPING"
+	task.Status = taskStatusStopping
 
 	for name, containerID := range task.Containers {
 		err := m.dockerClient.StopContainer(ctx, containerID, 10)
@@ -257,7 +273,7 @@ func (m *Manager) StopTask(ctx context.Context, taskID string) error {
 		}
 	}
 
-	task.Status = "STOPPED"
+	task.Status = taskStatusStopped
 	return nil
 }
 
@@ -338,7 +354,7 @@ func (m *Manager) GetTaskDependencyInfo(taskID string) (*DependencyInfo, error) 
 	ctx := context.Background()
 	for name, containerID := range task.Containers {
 		containerInfo := ContainerDependencyInfo{
-			ContainerID: containerID,
+			ContainerID:  containerID,
 			Dependencies: depGraph.GetDependencies(name),
 			Dependents:   depGraph.GetDependents(name),
 		}
@@ -358,7 +374,7 @@ func (m *Manager) GetTaskDependencyInfo(taskID string) (*DependencyInfo, error) 
 		}
 
 		// Check if waiting for dependencies
-		if containerInfo.Status != "running" && containerInfo.Status != "exited" {
+		if containerInfo.Status != containerStatusRunning && containerInfo.Status != containerStatusExited {
 			for _, dep := range containerInfo.Dependencies {
 				depContainerID := task.Containers[dep.ContainerName]
 				depState := m.getContainerState(depContainerID)
@@ -392,13 +408,13 @@ func (m *Manager) GetTaskDependencyInfo(taskID string) (*DependencyInfo, error) 
 func (m *Manager) isConditionSatisfied(status string, exitCode int, health string, condition string) bool {
 	switch condition {
 	case "START":
-		return status == "running"
+		return status == containerStatusRunning
 	case "COMPLETE":
-		return status == "exited"
+		return status == containerStatusExited
 	case "SUCCESS":
-		return status == "exited" && exitCode == 0
+		return status == containerStatusExited && exitCode == 0
 	case "HEALTHY":
-		return health == "healthy"
+		return health == healthStatusHealthy
 	default:
 		return false
 	}
@@ -434,44 +450,44 @@ type WaitingDependency struct {
 // FormatDependencyGraph returns a string representation of the dependency graph
 func (info *DependencyInfo) FormatDependencyGraph() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Dependency Graph for Task: %s\n", info.TaskID))
+	_, _ = fmt.Fprintf(&sb, "Dependency Graph for Task: %s\n", info.TaskID)
 	sb.WriteString(strings.Repeat("=", 60) + "\n\n")
 
 	// Show start levels
 	sb.WriteString("Start Levels (containers at same level start in parallel):\n")
 	for i, level := range info.StartLevels {
-		sb.WriteString(fmt.Sprintf("  Level %d: %v\n", i+1, level))
+		_, _ = fmt.Fprintf(&sb, "  Level %d: %v\n", i+1, level)
 	}
 	sb.WriteString("\n")
 
 	// Show dependencies for each container
 	sb.WriteString("Container Dependencies:\n")
 	for name, containerInfo := range info.Containers {
-		sb.WriteString(fmt.Sprintf("  %s [%s", name, containerInfo.Status))
-		if containerInfo.Health != "none" {
-			sb.WriteString(fmt.Sprintf(", health: %s", containerInfo.Health))
+		_, _ = fmt.Fprintf(&sb, "  %s [%s", name, containerInfo.Status)
+		if containerInfo.Health != healthStatusNone {
+			_, _ = fmt.Fprintf(&sb, ", health: %s", containerInfo.Health)
 		}
 		if containerInfo.ExitCode >= 0 {
-			sb.WriteString(fmt.Sprintf(", exit: %d", containerInfo.ExitCode))
+			_, _ = fmt.Fprintf(&sb, ", exit: %d", containerInfo.ExitCode)
 		}
 		sb.WriteString("]\n")
 
 		if len(containerInfo.Dependencies) > 0 {
 			sb.WriteString("    Depends on:\n")
 			for _, dep := range containerInfo.Dependencies {
-				sb.WriteString(fmt.Sprintf("      - %s (%s)\n", dep.ContainerName, dep.Condition))
+				_, _ = fmt.Fprintf(&sb, "      - %s (%s)\n", dep.ContainerName, dep.Condition)
 			}
 		}
 
 		if len(containerInfo.WaitingFor) > 0 {
 			sb.WriteString("    ⏳ Waiting for:\n")
 			for _, waiting := range containerInfo.WaitingFor {
-				sb.WriteString(fmt.Sprintf("      - %s (%s) [current: %s", waiting.ContainerName, waiting.Condition, waiting.CurrentStatus))
-				if waiting.CurrentHealth != "none" {
-					sb.WriteString(fmt.Sprintf(", health: %s", waiting.CurrentHealth))
+				_, _ = fmt.Fprintf(&sb, "      - %s (%s) [current: %s", waiting.ContainerName, waiting.Condition, waiting.CurrentStatus)
+				if waiting.CurrentHealth != healthStatusNone {
+					_, _ = fmt.Fprintf(&sb, ", health: %s", waiting.CurrentHealth)
 				}
 				if waiting.ExitCode >= 0 {
-					sb.WriteString(fmt.Sprintf(", exit: %d", waiting.ExitCode))
+					_, _ = fmt.Fprintf(&sb, ", exit: %d", waiting.ExitCode)
 				}
 				sb.WriteString("]\n")
 			}
@@ -480,7 +496,7 @@ func (info *DependencyInfo) FormatDependencyGraph() string {
 		if len(containerInfo.Dependents) > 0 {
 			sb.WriteString("    Dependents:\n")
 			for _, dependent := range containerInfo.Dependents {
-				sb.WriteString(fmt.Sprintf("      - %s\n", dependent))
+				_, _ = fmt.Fprintf(&sb, "      - %s\n", dependent)
 			}
 		}
 		sb.WriteString("\n")

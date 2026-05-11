@@ -14,7 +14,7 @@ func TestClient_PullImage(t *testing.T) {
 	defer client.Close()
 
 	ctx := context.Background()
-	
+
 	// Use a small, commonly available image
 	testImage := "alpine:latest"
 
@@ -61,7 +61,7 @@ func TestClient_PullImage_InvalidImage(t *testing.T) {
 	defer client.Close()
 
 	ctx := context.Background()
-	
+
 	// Try to pull a non-existent image
 	err = client.PullImage(ctx, "nonexistent/image:notreal", false)
 	if err == nil {
@@ -132,7 +132,7 @@ func TestClient_RemoveImage(t *testing.T) {
 	defer client.Close()
 
 	ctx := context.Background()
-	
+
 	// Pull a test image
 	testImage := "alpine:3.17"
 	err = client.PullImage(ctx, testImage, false)

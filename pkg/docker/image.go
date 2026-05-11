@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
@@ -28,7 +27,9 @@ func (c *Client) PullImage(ctx context.Context, imageName string, showProgress b
 	if err != nil {
 		return fmt.Errorf("failed to pull image %s: %w", imageName, err)
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 
 	if showProgress {
 		return c.displayPullProgress(reader)
@@ -54,9 +55,9 @@ func (c *Client) displayPullProgress(reader io.Reader) error {
 
 		if progress.Status != lastStatus {
 			if progress.ID != "" {
-				fmt.Fprintf(os.Stdout, "%s: %s\n", progress.ID, progress.Status)
+				fmt.Printf("%s: %s\n", progress.ID, progress.Status)
 			} else {
-				fmt.Fprintf(os.Stdout, "%s\n", progress.Status)
+				fmt.Printf("%s\n", progress.Status)
 			}
 			lastStatus = progress.Status
 		}

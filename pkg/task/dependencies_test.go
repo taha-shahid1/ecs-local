@@ -55,7 +55,11 @@ func TestGetStartOrder(t *testing.T) {
 		t.Fatalf("Failed to build dependency graph: %v", err)
 	}
 
-	order := graph.getStartOrder()
+	levels := graph.getStartLevels()
+	order := make([]string, 0, len(containers))
+	for _, level := range levels {
+		order = append(order, level...)
+	}
 
 	if len(order) != 3 {
 		t.Fatalf("Expected 3 containers in order, got %d", len(order))

@@ -47,7 +47,7 @@ func ExampleManager_RunTask() {
 		log.Fatalf("Failed to run task: %v", err)
 	}
 
-	fmt.Printf("Task %s started with %d containers\n", 
+	fmt.Printf("Task %s started with %d containers\n",
 		runningTask.Family, len(runningTask.Containers))
 
 	// Clean up
@@ -65,13 +65,13 @@ func ExampleManager_ListTasks() {
 	defer dockerClient.Close()
 
 	manager := task.NewManager(dockerClient)
-	
+
 	// List all running tasks
 	tasks := manager.ListTasks()
-	
+
 	fmt.Printf("Found %d running tasks\n", len(tasks))
 	for _, t := range tasks {
-		fmt.Printf("- %s (%s): %d containers\n", 
+		fmt.Printf("- %s (%s): %d containers\n",
 			t.Family, t.Status, len(t.Containers))
 	}
 }

@@ -11,7 +11,11 @@ import (
 	"github.com/taha-shahid1/ecs-local/pkg/task"
 )
 
-const version = "0.1.0"
+const (
+	version           = "0.1.0"
+	taskStatusRunning = "RUNNING"
+	taskStatusStopped = "STOPPED"
+)
 
 var (
 	dockerClient *docker.Client
@@ -41,7 +45,7 @@ func main() {
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			if dockerClient != nil {
-				dockerClient.Close()
+				_ = dockerClient.Close()
 			}
 		},
 	}
@@ -132,7 +136,7 @@ func psCmd() *cobra.Command {
 			if showDeps {
 				// Show detailed dependency information
 				for _, t := range tasks {
-					if !showAll && t.Status == "STOPPED" {
+					if !showAll && t.Status == taskStatusStopped {
 						continue
 					}
 					info, err := taskManager.GetTaskDependencyInfo(t.ID)
@@ -150,7 +154,7 @@ func psCmd() *cobra.Command {
 			fmt.Println("-------------------------------------------------------------------------------------------------------")
 
 			for _, t := range tasks {
-				if !showAll && t.Status == "STOPPED" {
+				if !showAll && t.Status == taskStatusStopped {
 					continue
 				}
 
@@ -315,7 +319,7 @@ func stopCmd() *cobra.Command {
 
 				fmt.Printf("Stopping %d task(s)...\n", len(tasks))
 				for _, t := range tasks {
-					if t.Status == "STOPPED" {
+					if t.Status == taskStatusStopped {
 						continue
 					}
 
@@ -364,12 +368,12 @@ func rmCmd() *cobra.Command {
 			}
 
 			// If not forcing and task is running, warn
-			if !force && task.Status == "RUNNING" {
+			if !force && task.Status == taskStatusRunning {
 				return fmt.Errorf("task is still running. Stop it first or use -f to force remove")
 			}
 
 			// Stop if running
-			if task.Status == "RUNNING" {
+			if task.Status == taskStatusRunning {
 				fmt.Printf("Stopping task %s...\n", taskID)
 				err := taskManager.StopTask(ctx, taskID)
 				if err != nil {
@@ -414,7 +418,7 @@ func execCmd() *cobra.Command {
 			found := false
 
 			for _, t := range taskManager.ListTasks() {
-				if t.Status != "RUNNING" {
+				if t.Status != taskStatusRunning {
 					continue
 				}
 

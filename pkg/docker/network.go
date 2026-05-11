@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 )
 
 // CreateNetwork creates a new Docker network for a task
 func (c *Client) CreateNetwork(ctx context.Context, networkName string) (string, error) {
 	enableIPv6 := false
-	resp, err := c.cli.NetworkCreate(ctx, networkName, types.NetworkCreate{
+	resp, err := c.cli.NetworkCreate(ctx, networkName, network.CreateOptions{
 		Driver:     "bridge",
 		EnableIPv6: &enableIPv6,
 		Internal:   false,

@@ -27,8 +27,8 @@ type ContainerState struct {
 
 // dependencyGraph represents the dependency structure with conditions
 type dependencyGraph struct {
-	containers map[string]*parser.ContainerDefinition
-	deps       map[string][]DependencyCondition // container -> dependencies with conditions
+	containers  map[string]*parser.ContainerDefinition
+	deps        map[string][]DependencyCondition // container -> dependencies with conditions
 	reverseDeps map[string][]string              // container -> dependents (for cascade failure)
 }
 
@@ -53,13 +53,13 @@ func buildDependencyGraph(containerDefs []parser.ContainerDefinition) (*dependen
 			if _, exists := graph.containers[dep.ContainerName]; !exists {
 				return nil, fmt.Errorf("container %s depends on non-existent container %s", name, dep.ContainerName)
 			}
-			
+
 			// Add dependency with condition
 			graph.deps[name] = append(graph.deps[name], DependencyCondition{
 				ContainerName: dep.ContainerName,
 				Condition:     dep.Condition,
 			})
-			
+
 			// Build reverse dependency map for cascade failure handling
 			graph.reverseDeps[dep.ContainerName] = append(graph.reverseDeps[dep.ContainerName], name)
 		}
@@ -110,33 +110,6 @@ func (g *dependencyGraph) detectCyclesHelper(name string, visited, recStack map[
 	return nil
 }
 
-// getStartOrder returns containers in dependency order (topological sort)
-// This is a simple DFS-based approach for backward compatibility
-func (g *dependencyGraph) getStartOrder() []string {
-	visited := make(map[string]bool)
-	order := []string{}
-
-	var visit func(string)
-	visit = func(name string) {
-		if visited[name] {
-			return
-		}
-		visited[name] = true
-
-		for _, dep := range g.deps[name] {
-			visit(dep.ContainerName)
-		}
-
-		order = append(order, name)
-	}
-
-	for name := range g.containers {
-		visit(name)
-	}
-
-	return order
-}
-
 // getStartLevels returns containers grouped by dependency level using Kahn's algorithm
 // Containers at the same level can be started in parallel
 func (g *dependencyGraph) getStartLevels() [][]string {
@@ -145,13 +118,13 @@ func (g *dependencyGraph) getStartLevels() [][]string {
 	for name := range g.containers {
 		inDegree[name] = 0
 	}
-	
+
 	for name, deps := range g.deps {
 		inDegree[name] = len(deps)
 	}
 
 	levels := [][]string{}
-	
+
 	// Process levels iteratively
 	for {
 		// Find all containers with in-degree 0 (no unprocessed dependencies)
@@ -171,7 +144,7 @@ func (g *dependencyGraph) getStartLevels() [][]string {
 		// Remove current level containers and update in-degrees
 		for _, name := range currentLevel {
 			inDegree[name] = -1 // Mark as processed
-			
+
 			// Decrease in-degree for dependents
 			for _, dependent := range g.reverseDeps[name] {
 				if inDegree[dependent] > 0 {
@@ -226,20 +199,20 @@ func (m *Manager) waitForStart(ctx context.Context, containerID string, waitingC
 				return err
 			}
 
-			m.updateContainerState(containerID, status, -1, "none")
+			m.updateContainerState(containerID, status, -1, healthStatusNone)
 
-			if status == "running" {
+			if status == containerStatusRunning {
 				log.Printf("[%s] Dependency container started (START condition satisfied)", waitingContainer)
 				return nil
 			}
 
-			if status == "exited" || status == "dead" {
+			if status == containerStatusExited || status == "dead" {
 				inspect, err := m.dockerClient.GetContainerInspect(ctx, containerID)
 				exitCode := -1
 				if err == nil {
 					exitCode = inspect.State.ExitCode
 				}
-				m.updateContainerState(containerID, status, exitCode, "none")
+				m.updateContainerState(containerID, status, exitCode, healthStatusNone)
 				return fmt.Errorf("container exited before starting properly (exit code: %d)", exitCode)
 			}
 		}
@@ -263,18 +236,18 @@ func (m *Manager) waitForComplete(ctx context.Context, containerID string, waiti
 				return err
 			}
 
-			if status == "exited" {
+			if status == containerStatusExited {
 				inspect, err := m.dockerClient.GetContainerInspect(ctx, containerID)
 				exitCode := -1
 				if err == nil {
 					exitCode = inspect.State.ExitCode
 				}
-				m.updateContainerState(containerID, status, exitCode, "none")
+				m.updateContainerState(containerID, status, exitCode, healthStatusNone)
 				log.Printf("[%s] Dependency container completed (COMPLETE condition satisfied)", waitingContainer)
 				return nil
 			}
 
-			m.updateContainerState(containerID, status, -1, "none")
+			m.updateContainerState(containerID, status, -1, healthStatusNone)
 		}
 	}
 }
@@ -296,14 +269,14 @@ func (m *Manager) waitForSuccess(ctx context.Context, containerID string, waitin
 				return err
 			}
 
-			if status == "exited" {
+			if status == containerStatusExited {
 				inspect, err := m.dockerClient.GetContainerInspect(ctx, containerID)
 				if err != nil {
 					return err
 				}
 
 				exitCode := inspect.State.ExitCode
-				m.updateContainerState(containerID, status, exitCode, "none")
+				m.updateContainerState(containerID, status, exitCode, healthStatusNone)
 
 				if exitCode == 0 {
 					log.Printf("[%s] Dependency container succeeded (SUCCESS condition satisfied)", waitingContainer)
@@ -313,7 +286,7 @@ func (m *Manager) waitForSuccess(ctx context.Context, containerID string, waitin
 				return fmt.Errorf("container exited with non-zero exit code: %d", exitCode)
 			}
 
-			m.updateContainerState(containerID, status, -1, "none")
+			m.updateContainerState(containerID, status, -1, healthStatusNone)
 		}
 	}
 }
@@ -342,16 +315,16 @@ func (m *Manager) waitForHealthy(ctx context.Context, containerID string, waitin
 			status, _ := m.dockerClient.GetContainerStatus(ctx, containerID)
 			m.updateContainerState(containerID, status, -1, health)
 
-			if health == "none" {
+			if health == healthStatusNone {
 				return fmt.Errorf("container does not have a health check configured")
 			}
 
-			if health == "healthy" {
+			if health == healthStatusHealthy {
 				log.Printf("[%s] Dependency container is healthy (HEALTHY condition satisfied)", waitingContainer)
 				return nil
 			}
 
-			if health == "unhealthy" {
+			if health == healthStatusUnhealthy {
 				return fmt.Errorf("container is unhealthy")
 			}
 		}
@@ -362,19 +335,19 @@ func (m *Manager) waitForHealthy(ctx context.Context, containerID string, waitin
 func (m *Manager) updateContainerState(containerID string, status string, exitCode int, health string) {
 	m.statesMu.Lock()
 	defer m.statesMu.Unlock()
-	
+
 	state, exists := m.containerStates[containerID]
 	if !exists {
 		state = &ContainerState{}
 		m.containerStates[containerID] = state
 	}
-	
+
 	state.mu.Lock()
 	state.Status = status
 	if exitCode >= 0 {
 		state.ExitCode = exitCode
 	}
-	if health != "none" {
+	if health != healthStatusNone {
 		state.Health = health
 	}
 	state.LastCheck = time.Now()

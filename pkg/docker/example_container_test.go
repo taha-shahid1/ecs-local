@@ -35,7 +35,7 @@ func ExampleClient_CreateContainer() {
 			"80": "8080", // container:host
 		},
 		Memory: 512 * 1024 * 1024, // 512MB
-		CPU:    512,                // CPU shares
+		CPU:    512,               // CPU shares
 	}
 
 	containerID, err := client.CreateContainer(ctx, config)

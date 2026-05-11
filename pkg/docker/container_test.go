@@ -63,7 +63,7 @@ func TestClient_CreateContainer_WithResources(t *testing.T) {
 		Image:  "alpine:latest",
 		Cmd:    []string{"sleep", "1"},
 		Memory: 128 * 1024 * 1024, // 128MB
-		CPU:    512,                // CPU shares
+		CPU:    512,               // CPU shares
 	}
 
 	containerID, err := client.CreateContainer(ctx, config)

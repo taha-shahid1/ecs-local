@@ -15,7 +15,7 @@ func ExampleParseTaskDefinition() {
 
 	fmt.Printf("Task Family: %s\n", taskDef.Family)
 	fmt.Printf("Number of Containers: %d\n", len(taskDef.ContainerDefinitions))
-	
+
 	for _, container := range taskDef.ContainerDefinitions {
 		fmt.Printf("Container: %s (Image: %s)\n", container.Name, container.Image)
 	}

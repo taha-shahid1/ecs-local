@@ -45,10 +45,10 @@ func TestManager_RunTask(t *testing.T) {
 		Family: "test-task",
 		ContainerDefinitions: []parser.ContainerDefinition{
 			{
-				Name:   "test-container",
-				Image:  "alpine:latest",
-				Memory: 128,
-				CPU:    256,
+				Name:    "test-container",
+				Image:   "alpine:latest",
+				Memory:  128,
+				CPU:     256,
 				Command: []string{"sleep", "5"},
 			},
 		},
@@ -103,9 +103,9 @@ func TestManager_RunTask_MultiContainer(t *testing.T) {
 				},
 			},
 			{
-				Name:   "app",
-				Image:  "alpine:latest",
-				Memory: 128,
+				Name:    "app",
+				Image:   "alpine:latest",
+				Memory:  128,
 				Command: []string{"sleep", "5"},
 			},
 		},
@@ -713,9 +713,9 @@ func TestDependencyInfo_FormatDependencyGraph(t *testing.T) {
 			},
 			"app": {
 				ContainerID: "app-id",
-				Status:     "running",
-				ExitCode:   -1,
-				Health:     "none",
+				Status:      "running",
+				ExitCode:    -1,
+				Health:      "none",
 				Dependencies: []DependencyCondition{
 					{ContainerName: "db", Condition: "START"},
 				},

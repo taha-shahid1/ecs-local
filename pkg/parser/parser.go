@@ -21,21 +21,21 @@ type TaskDefinition struct {
 
 // ContainerDefinition represents a container in an ECS task
 type ContainerDefinition struct {
-	Name              string                 `json:"name"`
-	Image             string                 `json:"image"`
-	CPU               int                    `json:"cpu,omitempty"`
-	Memory            int                    `json:"memory,omitempty"`
-	MemoryReservation int                    `json:"memoryReservation,omitempty"`
-	Essential         bool                   `json:"essential,omitempty"`
-	EntryPoint        []string               `json:"entryPoint,omitempty"`
-	Command           []string               `json:"command,omitempty"`
-	Environment       []EnvironmentVariable  `json:"environment,omitempty"`
-	PortMappings      []PortMapping          `json:"portMappings,omitempty"`
-	DependsOn         []ContainerDependency  `json:"dependsOn,omitempty"`
-	Links             []string               `json:"links,omitempty"`
-	HealthCheck       *HealthCheck           `json:"healthCheck,omitempty"`
-	LogConfiguration  *LogConfiguration      `json:"logConfiguration,omitempty"`
-	MountPoints       []MountPoint           `json:"mountPoints,omitempty"`
+	Name              string                `json:"name"`
+	Image             string                `json:"image"`
+	CPU               int                   `json:"cpu,omitempty"`
+	Memory            int                   `json:"memory,omitempty"`
+	MemoryReservation int                   `json:"memoryReservation,omitempty"`
+	Essential         bool                  `json:"essential,omitempty"`
+	EntryPoint        []string              `json:"entryPoint,omitempty"`
+	Command           []string              `json:"command,omitempty"`
+	Environment       []EnvironmentVariable `json:"environment,omitempty"`
+	PortMappings      []PortMapping         `json:"portMappings,omitempty"`
+	DependsOn         []ContainerDependency `json:"dependsOn,omitempty"`
+	Links             []string              `json:"links,omitempty"`
+	HealthCheck       *HealthCheck          `json:"healthCheck,omitempty"`
+	LogConfiguration  *LogConfiguration     `json:"logConfiguration,omitempty"`
+	MountPoints       []MountPoint          `json:"mountPoints,omitempty"`
 }
 
 // EnvironmentVariable represents an environment variable

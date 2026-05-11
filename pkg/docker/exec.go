@@ -126,8 +126,8 @@ func (c *Client) ExecWithIO(ctx context.Context, containerID string, cmd []strin
 
 	if opts.Stdin != nil {
 		go func() {
-			io.Copy(resp.Conn, opts.Stdin)
-			resp.CloseWrite()
+			_, _ = io.Copy(resp.Conn, opts.Stdin)
+			_ = resp.CloseWrite()
 		}()
 	}
 
