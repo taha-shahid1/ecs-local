@@ -338,7 +338,7 @@ func (m *Manager) updateContainerState(containerID string, status string, exitCo
 
 	state, exists := m.containerStates[containerID]
 	if !exists {
-		state = &ContainerState{}
+		state = &ContainerState{Health: healthStatusNone}
 		m.containerStates[containerID] = state
 	}
 
@@ -347,7 +347,7 @@ func (m *Manager) updateContainerState(containerID string, status string, exitCo
 	if exitCode >= 0 {
 		state.ExitCode = exitCode
 	}
-	if health != healthStatusNone {
+	if health != "" {
 		state.Health = health
 	}
 	state.LastCheck = time.Now()
