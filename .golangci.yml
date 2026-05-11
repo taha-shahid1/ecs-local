@@ -1,19 +1,7 @@
 version: "2"
 
-linters-settings:
-  govet:
-    enable:
-      - shadow
-  gocyclo:
-    min-complexity: 15
-  dupl:
-    threshold: 100
-  goconst:
-    min-len: 2
-    min-occurrences: 2
-
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
     - govet
@@ -24,9 +12,19 @@ linters:
     - goconst
     - gocyclo
     - dupl
+  settings:
+    govet:
+      enable:
+        - shadow
+    gocyclo:
+      min-complexity: 25
+    dupl:
+      threshold: 100
+    goconst:
+      min-len: 2
+      min-occurrences: 2
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
 

@@ -20,6 +20,11 @@ const (
 	taskStatusStopped      = "STOPPED"
 	taskStatusFailed       = "FAILED"
 
+	dependencyConditionStart    = "START"
+	dependencyConditionComplete = "COMPLETE"
+	dependencyConditionSuccess  = "SUCCESS"
+	dependencyConditionHealthy  = "HEALTHY"
+
 	containerStatusCreated = "created"
 	containerStatusRunning = "running"
 	containerStatusExited  = "exited"
@@ -102,7 +107,7 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 	for _, vol := range taskDef.Volumes {
 		if vol.Host == nil || vol.Host.SourcePath == "" {
 			volumeName := fmt.Sprintf("ecs-local-%s-%s", taskID, vol.Name)
-			_, err := m.dockerClient.CreateVolume(ctx, volumeName)
+			_, err = m.dockerClient.CreateVolume(ctx, volumeName)
 			if err != nil {
 				task.Status = taskStatusFailed
 				return nil, fmt.Errorf("failed to create volume %s: %w", vol.Name, err)
@@ -118,7 +123,7 @@ func (m *Manager) RunTask(ctx context.Context, taskDef *parser.TaskDefinition) (
 	// Pull all images first
 	for _, containerDef := range taskDef.ContainerDefinitions {
 		fmt.Printf("Pulling image: %s\n", containerDef.Image)
-		err := m.dockerClient.PullImage(ctx, containerDef.Image, true)
+		err = m.dockerClient.PullImage(ctx, containerDef.Image, true)
 		if err != nil {
 			task.Status = taskStatusFailed
 			return nil, fmt.Errorf("failed to pull image %s: %w", containerDef.Image, err)
@@ -407,13 +412,13 @@ func (m *Manager) GetTaskDependencyInfo(taskID string) (*DependencyInfo, error) 
 // isConditionSatisfied checks if a dependency condition is satisfied
 func (m *Manager) isConditionSatisfied(status string, exitCode int, health string, condition string) bool {
 	switch condition {
-	case "START":
+	case dependencyConditionStart:
 		return status == containerStatusRunning
-	case "COMPLETE":
+	case dependencyConditionComplete:
 		return status == containerStatusExited
-	case "SUCCESS":
+	case dependencyConditionSuccess:
 		return status == containerStatusExited && exitCode == 0
-	case "HEALTHY":
+	case dependencyConditionHealthy:
 		return health == healthStatusHealthy
 	default:
 		return false

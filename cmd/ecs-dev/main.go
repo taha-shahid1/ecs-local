@@ -375,7 +375,7 @@ func rmCmd() *cobra.Command {
 			// Stop if running
 			if task.Status == taskStatusRunning {
 				fmt.Printf("Stopping task %s...\n", taskID)
-				err := taskManager.StopTask(ctx, taskID)
+				err = taskManager.StopTask(ctx, taskID)
 				if err != nil {
 					return fmt.Errorf("failed to stop task: %w", err)
 				}

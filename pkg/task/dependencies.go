@@ -169,13 +169,13 @@ func (g *dependencyGraph) GetDependencies(containerName string) []DependencyCond
 
 func (m *Manager) waitForCondition(ctx context.Context, containerID string, condition string, waitingContainer string) error {
 	switch condition {
-	case "START":
+	case dependencyConditionStart:
 		return m.waitForStart(ctx, containerID, waitingContainer)
-	case "COMPLETE":
+	case dependencyConditionComplete:
 		return m.waitForComplete(ctx, containerID, waitingContainer)
-	case "SUCCESS":
+	case dependencyConditionSuccess:
 		return m.waitForSuccess(ctx, containerID, waitingContainer)
-	case "HEALTHY":
+	case dependencyConditionHealthy:
 		return m.waitForHealthy(ctx, containerID, waitingContainer)
 	default:
 		return fmt.Errorf("unknown condition: %s", condition)

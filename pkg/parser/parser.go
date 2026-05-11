@@ -6,6 +6,11 @@ import (
 	"os"
 )
 
+const (
+	protocolTCP = "tcp"
+	protocolUDP = "udp"
+)
+
 // TaskDefinition represents an ECS task definition
 type TaskDefinition struct {
 	Family                  string                `json:"family"`
@@ -182,10 +187,10 @@ func (pm *PortMapping) Validate() error {
 	}
 
 	if pm.Protocol == "" {
-		pm.Protocol = "tcp"
+		pm.Protocol = protocolTCP
 	}
 
-	if pm.Protocol != "tcp" && pm.Protocol != "udp" {
+	if pm.Protocol != protocolTCP && pm.Protocol != protocolUDP {
 		return fmt.Errorf("protocol must be 'tcp' or 'udp'")
 	}
 
